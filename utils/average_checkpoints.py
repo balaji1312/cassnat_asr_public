@@ -9,6 +9,8 @@ import numpy as np
 
 
 def main():
+    #average weights over last args.num epochs 
+    
     parser = argparse.ArgumentParser(description="average models")
     parser.add_argument("--exp_dir", required=True, type=str)
     parser.add_argument("--out_name", required=True, type=str)

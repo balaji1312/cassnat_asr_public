@@ -1,10 +1,8 @@
 #!/usr/bin/env bash
 
-# 2020 Ruchao Fan PAII Inc.
-# 2022 Ruchao Fan SPAPL UCLA
+# 2020 Ruchao Fan
 # This script is to run our proposed CASS-NAT, The name is CASS-NAT
 # (CTC alignement-based Signgle Step Non-autoregressive Transformer).
-
 
 . cmd.sh
 . path.sh
@@ -12,8 +10,10 @@
 stage=1
 end_stage=1
 lm_model=exp/libri_tfunilm16x512_4card_cosineanneal_ep20_maxlen120/averaged.mdl
-
-asr_exp=exp/cassnat_noam15k_initart_interctc05_ly6_interce01_ly6_a4000_ptlr4e-4_uptlr1e-3/
+encoder_initial_model=exp/1kh_transformer_baseline_wotime_warp_f27t005/averaged.mdl
+#asr_exp=exp/cassnat_multistep_initart_wosrc_wosrctrig_bimask/
+#asr_exp=exp/cassnat_multistep_initart_wsrc_2blk_wsrctrig_bimask/
+asr_exp=exp/test
 
 if [ $stage -le 1 ] && [ $end_stage -ge 1 ]; then
 
@@ -21,36 +21,44 @@ if [ $stage -le 1 ] && [ $end_stage -ge 1 ]; then
     mkdir -p $asr_exp
   fi
 
-  CUDA_VISIBLE_DEVICES="0,1" train_asr.py \
-    --task "cassnat" \
+  TORCH_DISTRIBUTED_DEBUG="INFO" CUDA_VISIBLE_DEVICES="2,3" train_asr.py \
+    --task "hubert" \
     --exp_dir $asr_exp \
-    --train_config conf/cassnat_train.yaml \
-    --data_config conf/data_wp.yaml \
+    --train_config conf/hubert_train.yaml \
+    --data_config conf/hubert_data.yaml \
     --optim_type "noam" \
     --epochs 60 \
     --start_saving_epoch 10 \
     --end_patience 10 \
     --seed 1234 \
-    --print_freq 100 \
-    --port 18222 #>> $asr_exp/train.log 2>&1 &
+    --port 17111 \
+    --print_freq 100 > $asr_exp/train.log 2>&1 &
+    
     
   echo "[Stage 1] ASR Training Finished."
 fi
+# echo "[Stage 1,1] ASR Training Finished."
 
+# --print_freq 100 > $asr_exp/train.log 2>&1 &
 
 out_name='averaged.mdl'
 if [ $stage -le 2 ] && [ $end_stage -ge 2 ]; then
-  last_epoch=45  # need to be modified
+  last_epoch=81  # need to be modified
   
   average_checkpoints.py \
     --exp_dir $asr_exp \
     --out_name $out_name \
     --last_epoch $last_epoch \
-    --num 10
+    --num 12
   
   echo "[Stage 2] Average checkpoints Finished."
 
 fi
+
+#asr_exp=exp/conv_fanat_best_interctc05_ctc05_interce01_ce09_aftermapping/
+#asr_exp=exp/conv_fanat_e10m2d4_max_specaug_multistep_initenc_convdec_maxlen8_kernel3_ctxtrig1
+#asr_exp=exp_cassnat/fanat_large_specaug_multistep_trig_src_initenc_SchD_shift_path0
+#asr_exp=exp/conv_fanat_best_interctc05_ctc05_interce01_ce09
 
 if [ $stage -le 3 ] && [ $end_stage -ge 3 ]; then
   exp=$asr_exp
@@ -58,7 +66,7 @@ if [ $stage -le 3 ] && [ $end_stage -ge 3 ]; then
   bpemodel=data/dict/bpemodel_unigram_1024
   rank_model="at_baseline" #"lm", "at_baseline"
   #rnnlm_model=$lm_model
-  rnnlm_model=exp/100h_wp_cfmer_interctc05_layer6_noam_warmup15k_lrpk1e-3_epoch60_2gpus/averaged.mdl
+  rnnlm_model=exp/100h_wp_cfmer_interctc05_layer6_noam_warmup15k_lrpk1e-3_epoch60_2gpus/averaged.mdl #figure out how trained
   rank_yaml=conf/rank_model.yaml
   test_model=$asr_exp/$out_name
   decode_type='esa_att'
@@ -91,8 +99,9 @@ if [ $stage -le 3 ] && [ $end_stage -ge 3 ]; then
     
     $cmd JOB=1:$nj $desdir/log/decode.JOB.log \
       CUDA_VISIBLE_DEVICES=JOB decode_asr.py \
-        --task "cassnat" \
-        --test_config conf/cassnat_decode.yaml \
+        --task "hubert" \
+        --dataset_type "HubertDataset" \
+        --test_config conf/hubert_decode.yaml \
         --lm_config $rank_yaml \
         --rank_model $rank_model \
         --data_path $desdir/feats.JOB.scp \

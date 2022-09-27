@@ -1,0 +1,1 @@
+from models.hubert.hubert_model import make_model as make_hubert_model

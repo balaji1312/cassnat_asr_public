@@ -1,0 +1,23 @@
+train_data_path:
+  1:
+    name: 'train_clean_100'
+    scp_path: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/train_clean_100/wav_s.scp
+    text_label: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/train_clean_100/token_wp.scp
+    utt2num_frames: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/train_clean_100/utt2num_frames #does not exist
+
+dev_data_path:
+  1:
+    name: 'dev_clean'
+    scp_path: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dev_clean/wav_s.scp 
+    text_label: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dev_clean/token_wp.scp
+    utt2num_frames: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dev_clean/utt2num_frames #does not exist
+  2:
+    name: 'dev_other'
+    scp_path: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dev_other/wav_s.scp
+    text_label: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dev_other/token_wp.scp
+    utt2num_frames: data/dev_other/utt2num_frames #does not exist
+
+vocab_file: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/dict/vocab_wp.txt
+global_cmvn: /data/balaji/workdir/cassnat_asr/egs/librispeech/data/fbank/cmvn_sp.ark #does not exist
+
+
