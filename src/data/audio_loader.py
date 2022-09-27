@@ -51,7 +51,6 @@ class SingleWavSet(object):
 
         with open(wav_path, 'r') as fin:
             line = fin.readline()
-            # count = 0
             for line in fin:
                 cont = line.strip().split(' ')
 
@@ -66,10 +65,6 @@ class SingleWavSet(object):
 
                 file_dict.append((utt,path,samples))
 
-                # count+=1
-
-                # if count%10==0:
-                #     print(utt)
 
         if self.rank == 0:
             print("Reading %d lines from %s" % (len(file_dict), wav_path))
@@ -180,7 +175,6 @@ class HubertDataset(Dataset):
         batches = []
         start = 0
 
-        # count = 0
         while True:
 
             lablen = len(all_data[start][-1])
@@ -198,11 +192,6 @@ class HubertDataset(Dataset):
             if end == len(all_data):
                 break
             start = end
-
-            # count+=1
-
-            # if count%10==0:
-            #     print(count)
         return batches
     
     def make_batch_data_by_samples(self):

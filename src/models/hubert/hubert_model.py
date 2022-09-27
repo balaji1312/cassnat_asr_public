@@ -156,24 +156,14 @@ class HubertNAT(nn.Module):
     def forward(self, src, src_mask, src_size, tgt_label, label_sizes, args):
         # ///OG 1. compute ctc output
 
-        # print("src f", src.size())
-        # print("src_mask f", src_mask.size())
 
         enc_h, x_mask, x = self.hub_base(source=src,padding_mask=src_mask)
 
-        # enc_h = hub_out["x"]
-        # x = hub_out["features"]
-        # x_mask = hub_out["padding_mask"]
-
-        # print(x, "\n")
-        # print("x_mask f", x_mask.size())
-        # print("enc_h f", enc_h.size())
 
         x_mask = x_mask.unsqueeze(1)
 
         x_mask = ~x_mask
 
-        # print(enc_h, "\n")
         # #obtain conv emb of input
         # x, x_mask = self.src_embed(src, src_mask)
 
@@ -181,33 +171,20 @@ class HubertNAT(nn.Module):
         # enc_h = self.encoder(x, x_mask, args.interctc_alpha, args.interctc_layer)
 
         #based on params generate ctc op
-        # print(x, "\n")
         ctc_out = self.ctc_generator(enc_h)
 
         interctc_out = 0
 
-        # if args.ctc_alpha > 0 and args.interctc_alpha >= 0:
-        #     ctc_out = self.ctc_generator(enc_h)
-        #     interctc_out = 0
-            # print('this runs')
+        if args.ctc_alpha > 0 and args.interctc_alpha >= 0:
+            ctc_out = self.ctc_generator(enc_h)
+            interctc_out = 0
         # elif args.ctc_alpha > 0 and args.interctc_alpha > 0:
         #     enc_h, inter_h = enc_h[0], enc_h[1]
         #     ctc_out = self.ctc_generator(enc_h)
         #     interctc_out = self.interctc_generator(inter_h)
-        # else:
-        #     ctc_out = enc_h.new_zeros(enc_h.size())
-        #     interctc_out = 0
-        # if (x == 0).all(dim=-1).any():
-        #     print((x == 0).all(dim=-1))
-        #     return
-        # if torch.isnan(enc_h).any():
-            # print("enc_h", enc_h, "\n")
-            # print("x", x, "\n")
-            # print("src", src, "\n")
-            # print("src_size", src_size, "\n")
-            # print("tgt_label", tgt_label, "\n")
-            # print("label_sizes", label_sizes, "\n")
-            # return 
+        else:
+            ctc_out = enc_h.new_zeros(enc_h.size())
+            interctc_out = 0
 
 
         # ///OG 2. prepare different masks,
@@ -215,28 +192,14 @@ class HubertNAT(nn.Module):
 
         #obtain trigger mask by performing alignment on ctc op (to obtain submask for each character)
         if args.use_trigger:
-            # print(ctc_out.size())
+
             assert args.ctc_alpha > 0
             src_size = (src_size * ctc_out.size(1)).long()
-            # print(src_size)
             blank = args.padding_idx
-            # print("ctc_out", ctc_out)
             if args.use_best_path:
                 trigger_mask, ylen, ymax = self.best_path_align(ctc_out, x_mask, src_size, blank)
-                # print("trigger_max", trigger_mask.size(), "\n")
-                # print("ylen", ylen.size(), "\n")
-                # print("ymax", ymax, "\n")
             else:
                 aligned_seq_shift, ylen, ymax = self.viterbi_align(ctc_out, x_mask, src_size, tgt_label[:,:-1], ylen, blank, args.sample_topk)
-                # print("aligned_seq_shift", aligned_seq_shift.size())
-                # print("ylen", ylen.size())
-                # print("ymax", ymax)
-                # print("ctc_out", ctc_out)
-                # print("x_mask", x_mask.size())
-                # print("src_size", src_size.size())
-                # print("tgt_label", tgt_label.size())
-                # print("blank", blank)
-                # print("args.sample_topk", args.sample_topk.size())
                 trigger_mask, ylen, ymax = self.align_to_mask(aligned_seq_shift, ylen, ymax, x_mask, src_size, blank)
 
             trigger_mask = self.expand_trigger_mask(trigger_mask, args.left_trigger, args.right_trigger)
@@ -246,8 +209,6 @@ class HubertNAT(nn.Module):
             ylen = ylen + 1
             ymax = ylen.max().item()
 
-        # print("trigger mask", trigger_mask.size())
-        # print(enc_h.size())
         bs, _, d_model = enc_h.size()
 
         #fill all vals upto ylen with 1, and 0 after
@@ -283,13 +244,13 @@ class HubertNAT(nn.Module):
 
         #obtain mix attn decoder op
         dec_h = self.decoder(pred_embed, enc_h, x_mask, tgt_mask, args.mixce_alpha, args.interce_layer)
-        interce_out = 0
+
         #based on params generate final decoder op
-        # if args.mixce_alpha > 0:
-        #     dec_h, interce_h = dec_h[0], dec_h[1]
-        #     interce_out = self.interce_generator(interce_h)
-        # elif args.interce_alpha == 0:
-        #     interce_out = 0
+        if args.mixce_alpha > 0:
+            dec_h, interce_h = dec_h[0], dec_h[1]
+            interce_out = self.interce_generator(interce_h)
+        elif args.interce_alpha == 0:
+            interce_out = 0
         
         #log + softmax decoder op
         att_out = self.att_generator(dec_h)
@@ -304,9 +265,9 @@ class HubertNAT(nn.Module):
             ctc_loss = torch.Tensor([0])
 
         #if interectc was computed, compute loss and multiply by factor
-        # if args.interctc_alpha > 0:
-        #     interctc_loss = self.interctc_loss(interctc_out.transpose(0,1), tgt_label, src_size, label_sizes)
-        #     loss += args.interctc_alpha * interctc_loss
+        if args.interctc_alpha > 0:
+            interctc_loss = self.interctc_loss(interctc_out.transpose(0,1), tgt_label, src_size, label_sizes)
+            loss += args.interctc_alpha * interctc_loss
         
         # ///OG loss computation
 
@@ -319,9 +280,9 @@ class HubertNAT(nn.Module):
         loss += args.att_alpha * att_loss
         
         #if interce was computed, compute loss and multiply by factor
-        # if args.interce_alpha > 0:
-        #     interce_loss = self.interce_loss(interce_out.view(-1, interce_out.size(-1)), tgt_label.view(-1))
-        #     loss += args.interce_alpha * interce_loss
+        if args.interce_alpha > 0:
+            interce_loss = self.interce_loss(interce_out.view(-1, interce_out.size(-1)), tgt_label.view(-1))
+            loss += args.interce_alpha * interce_loss
 
         return ctc_out, att_out, loss, ctc_loss, att_loss
 
@@ -345,21 +306,12 @@ class HubertNAT(nn.Module):
         ys: target label
         ylen: specify the effective label length of each sampel in a batch
         """
-        # print("ctc out", ctc_out)
-        # print("ctc out max", ctc_out.max())
-        # print("ctc out min", ctc_out.min())
         bs, xmax, vocab = ctc_out.size() #no. of batches, features, prob of each char in vocab
-        # print("ctc out", ctc_out.size())
-        # print("src_mask", src_mask.size())
-        # print("src mask vals", src_mask)
+        
         # mask = src_mask.unsqueeze(2).repeat([1, 1, vocab]) # /// OG bs, T, vocab
         mask = src_mask.transpose(1,2).repeat([1, 1, vocab])
-        # print("mask", mask.size())
         #fill log prob with max negative value - logzero for masked entries
         log_probs = ctc_out.masked_fill(mask == 0, logzero).transpose(0, 1) #feat,bs,vocab
-        # print("log probs", log_probs.size())
-
-        # print('ys', ys.size())
        
         #///OG 1. insert blanks between labels
         #expands to 2*size, and add a blank label in between
@@ -368,9 +320,6 @@ class HubertNAT(nn.Module):
         path[:, 1::2] = ys
         path_lens = 2 * ylens.long() + 1
         max_path_len = path.size(1)
-        # print('path', path.size())
-        # print('path lens', path_lens)
-        # print('ylens', ylens)
 
         # ///OG 2. keep probabilities in path 
         
@@ -378,7 +327,6 @@ class HubertNAT(nn.Module):
         seq_index = torch.arange(xmax).type_as(ylens).unsqueeze(1).unsqueeze(2)
         log_probs_path = log_probs[seq_index, batch_index, path] #for each xmax and batch, select one element based on path value
 
-        # print('log probs path', log_probs_path.size())
         
         # ///OG 3. forward algorithm with max replacing sum
 
@@ -391,8 +339,6 @@ class HubertNAT(nn.Module):
         index_fix = torch.arange(max_path_len).type_as(ylens)
         outside = index_fix >= path_lens.unsqueeze(1) #check if index is outside mat dimensions
 
-        # print('outside', outside.size())
-        
         if sample_topk > 1:
             t_sample = torch.randint(1, xmax, (1, sample_topk)).numpy().tolist()
         
@@ -413,12 +359,9 @@ class HubertNAT(nn.Module):
                 max_prob, max_indices = torch.max(mat, dim=0)
             max_prob[outside] = logzero
             bp[:,t,:] = index_fix - max_indices
-            if bp[:,t,:].any()<0:
-                print(index_fix, max_indices)
             alpha[t+1,:,:] = max_prob + log_probs_path[t,:,:]
         bp[bp<0]=0
-        # print('bp',bp.min())
-        # print('bp',bp.max())
+
         # ///OG 4. Compare N-1 and N-2 at t-1, get the path with a higher prob
         # ///OG   Then back path tracing, Seems hard to parallelize this part
         aligned_seq = ys.new_zeros((bs, xmax))
@@ -428,25 +371,15 @@ class HubertNAT(nn.Module):
             aligned_seq[b, xb-1] = yb - 1 if score1 > score2 else yb - 2
             for t in range(xb-1, 0, -1):
                 aligned_seq[b, t-1] = bp[b,t,aligned_seq[b, t]]
-                # if aligned_seq[b,t-1]<0:
-                #     print(-1, b,t-1, "\n")
-                # if aligned_seq[b,t-1]==0:
-                #     print(0, b,t-1, "\n")
-        # print('aligned seq', aligned_seq.size())
-        # print('path', path.size())
-        # print('path values', aligned_seq.max())
-        # print('path values', aligned_seq.min())
+
         # ///OG 5. remove repetition, locate the time step for each label 
         aligned_seq = torch.gather(path, 1, aligned_seq)
-        # print('aligned seq after', aligned_seq.size())
         aligned_seq_shift = aligned_seq.new_zeros(aligned_seq.size())
         aligned_seq_shift[:, 1:] = aligned_seq[:,:-1]
         dup = aligned_seq == aligned_seq_shift #generates matrix with only first activation of each token
-        # print("aligned_seq", aligned_seq)
         aligned_seq.masked_fill_(dup, 0)
         aligned_seq_shift[:,1:] = aligned_seq[:,:-1]
         
-        print("aligned_seq_shift sum", aligned_seq_shift.sum())
         #final op is of form (0,0,1,0,0,0,1,0) for (_,_,C,C,C,C,A,A)
         return aligned_seq_shift, ylens, ymax
 

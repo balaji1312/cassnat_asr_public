@@ -103,7 +103,6 @@ def main_worker(rank, world_size, args, backend='nccl'):
     else:
         raise NotImplementedError
     
-    # print('this runs')
     #train model
     task.run(args)
       

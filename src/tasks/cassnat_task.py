@@ -257,7 +257,6 @@ class CassNATTask(BaseTask):
             start = time.time()
             utt_list, feats, labels, feat_sizes, label_sizes = data
             src, src_mask = feats, (feats[:,:,0] != args.padding_idx).unsqueeze(1)
-            print(src.size(), src_mask.size())
             tgt_label = labels[:,1:]
             tgt = labels[:,:-1]
             tokens = (tgt_label != args.padding_idx).sum().item()

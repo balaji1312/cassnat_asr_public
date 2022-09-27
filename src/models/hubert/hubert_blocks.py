@@ -139,7 +139,6 @@ class ConvFeatureExtractionModel(nn.Module):
         for conv in self.conv_layers:
             
             x = conv(x)
-            # print(i, x, "\n")
         
 
         return x
@@ -230,7 +229,6 @@ class TransformerEncoder(nn.Module):
     def forward(self, x, padding_mask=None, layer=None):
         
         x, layer_results = self.extract_features(x, padding_mask, layer)
-        # print('layer', layer_results, "\n")
         if self.layer_norm_first and layer is None:
             x = self.layer_norm(x)
 
@@ -246,21 +244,16 @@ class TransformerEncoder(nn.Module):
 
         if padding_mask is not None:
             x = index_put(x, padding_mask, 0)
-        # print('x after index put', x ,x.size(), "\n")
         x_conv = self.pos_conv(x.transpose(1, 2))
         x_conv = x_conv.transpose(1, 2)
         x = x + x_conv
-        # print('x_conv after conv pos', x_conv ,x_conv.size(), "\n")
-        # print('x after conv pos', x ,x.size(), "\n")
 
         if not self.layer_norm_first:
             x = self.layer_norm(x)
-        # print('x after layer norm', x ,x.size(), "\n")
         # pad to the sequence length dimension
         x, pad_length = pad_to_multiple(
             x, self.required_seq_len_multiple, dim=-2, value=0
         )
-        # print('x after pad', x ,x.size(), "\n")
         if pad_length > 0 and padding_mask is None:
             padding_mask = x.new_zeros((x.size(0), x.size(1)), dtype=torch.bool)
             padding_mask[:, -pad_length:] = True
@@ -278,7 +271,6 @@ class TransformerEncoder(nn.Module):
         for i, layer in enumerate(self.layers):
             dropout_probability = np.random.random() if self.layerdrop > 0 else 1
             if not self.training or (dropout_probability > self.layerdrop):
-                # print(i, x, "\n")
                 x, (z, lr) = layer(
                     x, self_attn_padding_mask=padding_mask, need_weights=False
                 )
@@ -512,9 +504,7 @@ class HubertModel(nn.Module):
         output_layer: Optional[int] = None,
     ) -> Dict[str, torch.Tensor]:
         """output layer is 1-based"""
-        # print("source", source, "\n")
         features = self.forward_features(source)
-        # print("features", features, features.size(),"\n")
         
         # if target_list is not None:
         #     features, target_list = self.forward_targets(features, target_list)
@@ -523,7 +513,6 @@ class HubertModel(nn.Module):
 
         features = features.transpose(1, 2)
         features = self.layer_norm(features)
-        # print("features after layer norm", features,features.size(), "\n")
         # unmasked_features = features.clone().detach()
 
         padding_mask = self.forward_padding_mask(features, padding_mask)
@@ -532,31 +521,23 @@ class HubertModel(nn.Module):
             features = self.post_extract_proj(features)
 
         features = self.dropout_input(features)
-        # print("features after dropout", features,features.size(), "\n")
         # unmasked_features = self.dropout_features(unmasked_features)
 
 
         x, mask_indices = self.apply_mask(features, padding_mask, target_list)
 
-        # print("x after masking", x,x.size(), "\n")
-        # print("padding mask after masking", padding_mask, "\n")
-        # else:
-        #     mask_indices = None
 
         # feature: (B, T, D), float
         # target: (B, T), long
         # x: (B, T, D), float
         # padding_mask: (B, T), bool
         # mask_indices: (B, T), bool
-        # print("before", x, "\n")
+
         x, _ = self.encoder(
             x,
             padding_mask=padding_mask,
             layer=None
         )
-        # print("x after encoder", x, "\n")
-        # print("features after encoder", features, "\n")
-        # print("padding mask after encoder", padding_mask, "\n")
         
         return x, padding_mask, features
 

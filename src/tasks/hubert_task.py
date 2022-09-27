@@ -90,11 +90,10 @@ class HubertTask(BaseTask):
                 if name.split('.')[0] == "module":
 
                     n_name = '.'.join(name.split('.')[1:]).strip()
-                    # print(n_name)
+
                     if n_name.split('.')[0] == "hub_base":
                         
                         name_sp = '.'.join(n_name.split('.')[1:]).strip()
-                        # print(name_sp, "\n")
                         try:
                             param.data.copy_(model[name_sp])
                         
@@ -105,21 +104,9 @@ class HubertTask(BaseTask):
                 if name.split('.')[0] == "hub_base":
                     try:
                         name_sp = '.'.join(name.split('.')[1:]).strip()
-                        # print(name_sp)
-                        # if name_sp in model:
-                        #     param.data.copy_(model[name_sp])
-                        # else:
-                        #     param.data.copy_(model['module.'+name_sp])
-                        # print(name_sp)
                         param.data.copy_(model[name_sp])
                         # param.requires_grad = False
 
-                        # print(name_sp)
-
-                        # if name in checkpoint:
-                        #     param.data.copy_(checkpoint[name])
-                        # else:
-                        #     param.data.copy_(checkpoint['module.'+name])
                     except:
                         if rank == 0:
                             print("No param of {} in resume model".format(name))
@@ -127,7 +114,6 @@ class HubertTask(BaseTask):
                 # if fix_encoder:
                 #     param.requires_grad = False
 
-        # print('this runs')
         self.start_epoch = 0
 
     def load_lm_model(self, args):
@@ -281,7 +267,6 @@ class HubertTask(BaseTask):
 
     def run_one_epoch(self, epoch, args, is_train=True):
 
-        # print(self.model)
         
         #set dataloader and args
         dataloader = self.train_loader if is_train else self.valid_loader
@@ -304,35 +289,14 @@ class HubertTask(BaseTask):
         
         end = time.time()
         updates = -1
-        #1, 1157
-        # for i, data in enumerate(dataloader):
-        #     #check out smallest recording and sorting to see if padding is causing an issue
-        #     if i==1647,211:
-        #         utt_list, audios, labels, audio_sizes, label_sizes = data
-        #         print(audios.size())
-        #         print(audio_sizes)
-        #         print(label_sizes)
-        #         print(utt_list)
-        #         print(i)
-        #         break
-        
-
-        
-        #pass input to model to determine output
-
-        #243840
-        #'445-123857-0010'
-        #'4481-17499-0010', '445-123860-0007'
-        
         
         for i, data in enumerate(dataloader):
-            # if i < 1156:
-            #     continue
+
             start = time.time()
             utt_list, audios, labels, audio_sizes, label_sizes = data
             src, src_mask = audios, (audios == args.padding_idx) #all audio except files which are masked
                                                                                     #check first col to see if file is masked
-            # print(src.size(), src_mask.size())
+            
             tgt_label = labels[:,1:] #exclude sos
             tgt = labels[:,:-1] #exclude eos
             tokens = (tgt_label != args.padding_idx).sum().item()
@@ -349,50 +313,8 @@ class HubertTask(BaseTask):
             
             #pass input to model to determine output
 
-            #243840
-            #'445-123857-0010'
-            #'4481-17499-0010', '445-123860-0007'
             
-            # try:
             ctc_out, att_out, loss, ctc_loss, att_loss = self.model(src, src_mask, audio_sizes, tgt_label, label_sizes, args)
-
-            # def get_contributing_params(z, top_level=True):
-            #     nf = z.grad_fn.next_functions if top_level else z.next_functions
-            #     for f, _ in nf:
-            #         try:
-            #             yield f.variable
-            #         except AttributeError:
-            #             pass  # node has no tensor
-            #         if f is not None:
-            #             yield from get_contributing_params(f, top_level=False)
-
-            # contributing_parameters = set(get_contributing_params(loss))
-            # all_parameters = set(self.model.parameters())
-            # non_contributing = all_parameters - contributing_parameters
-            # print(non_contributing)
-            
-            # except:
-            #     print(audios.size())
-            #     print(src_mask)
-            #     print(audio_sizes)
-            #     # tst = src_mask[0,:].sum()/src_mask[1,:].sum()
-            #     # print(tst)
-            #     print(label_sizes)
-            #     print(utt_list)
-            #     print(i)
-            #     exit()
-
-            # print(i)
-                
-            # yhat = (ctc_out, att_out, loss, ctc_loss, att_loss)
-            # from torchviz import make_dot
-
-            # if i ==0:
-            #     dot = make_dot(yhat, params=dict(list(self.model.named_parameters())))
-
-            #     dot.format='svg'
-            #     dot.filename = 'image2'
-            #     dot.render(view=False)
 
             bs, max_audio_size, _ = ctc_out.size()
             audio_sizes = (audio_sizes * max_audio_size).long()

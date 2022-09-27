@@ -135,18 +135,13 @@ class CassNAT(nn.Module):
             
     def forward(self, src, src_mask, src_size, tgt_label, label_sizes, args):
         # ///OG 1. compute ctc output
-        # print("src f", src.size())
-        # print("src_mask f", src_mask.size())
         #obtain conv emb of input
         x, x_mask = self.src_embed(src, src_mask)
 
-        # print("x f", x[0].size())
-        # print("x_mask f", x_mask.size())
 
         #pass through encoder
         enc_h = self.encoder(x, x_mask, args.interctc_alpha, args.interctc_layer)
 
-        # print(x, "\n")
 
         #based on params generate ctc op
         if args.ctc_alpha > 0 and args.interctc_alpha == 0:
@@ -160,7 +155,6 @@ class CassNAT(nn.Module):
             ctc_out = enc_h.new_zeros(enc_h.size())
             interctc_out = 0
         
-        # print("enc_h f", enc_h.size())
         
         # ///OG 2. prepare different masks,
         ylen = label_sizes
@@ -174,13 +168,7 @@ class CassNAT(nn.Module):
                 trigger_mask, ylen, ymax = self.best_path_align(ctc_out, x_mask, src_size, blank)
             else:
                 aligned_seq_shift, ylen, ymax = self.viterbi_align(ctc_out, x_mask, src_size, tgt_label[:,:-1], ylen, blank, args.sample_topk)
-                # print("aligned_seq_shift", aligned_seq_shift.size())
-                # print("ylen", ylen.size())
-                # print("ymax", ymax)
-                # print("ctc_out", ctc_out)
-                # print("x_mask", x_mask.size())
-                # print("src_size", src_size.size())
-                # print("tgt_label", tgt_label.size())
+                
                 trigger_mask, ylen, ymax = self.align_to_mask(aligned_seq_shift, ylen, ymax, x_mask, src_size, blank)
 
             trigger_mask = self.expand_trigger_mask(trigger_mask, args.left_trigger, args.right_trigger)
@@ -190,7 +178,6 @@ class CassNAT(nn.Module):
             ylen = ylen + 1
             ymax = ylen.max().item()
 
-        print("trigger mask", trigger_mask.size())
         
         bs, _, d_model = enc_h.size()
 
@@ -289,20 +276,13 @@ class CassNAT(nn.Module):
         ys: target label
         ylen: specify the effective label length of each sampel in a batch
         """
-        # print("ctc out", ctc_out)
-
-        # print("ctc out max", ctc_out.max())
-        # print("ctc out min", ctc_out.min())
         bs, xmax, vocab = ctc_out.size() #no. of batches, features, prob of each char in vocab
-        # print("ctc out", ctc_out.size())
-        # print("src_mask", src_mask.size())
-        # print("src mask vals", src_mask)
+        
         mask = src_mask.transpose(1,2).repeat([1, 1, vocab]) # /// OG bs, T, vocab
-        # print("mask", mask.size())
+        
         #fill log prob with max negative value - logzero
         log_probs = ctc_out.masked_fill(mask == 0, logzero).transpose(0, 1) 
-        # print("log probs", log_probs.size())
-       
+        
         #///OG 1. insert blanks between labels
         #expands to 2*size, and add a blank label in between
         ymax = ys.size(1)
@@ -310,8 +290,6 @@ class CassNAT(nn.Module):
         path[:, 1::2] = ys
         path_lens = 2 * ylens.long() + 1
         max_path_len = path.size(1)
-
-        # print('path', path.size(), "\n")
 
         # ///OG 2. keep probabilities in path 
         
@@ -352,8 +330,6 @@ class CassNAT(nn.Module):
             bp[:,t,:] = index_fix - max_indices
             alpha[t+1,:,:] = max_prob + log_probs_path[t,:,:]
         
-        # print('bp', bp.min())
-        # print('bp',bp.max())
         # ///OG 4. Compare N-1 and N-2 at t-1, get the path with a higher prob
         # ///OG   Then back path tracing, Seems hard to parallelize this part
         aligned_seq = ys.new_zeros((bs, xmax))
@@ -363,21 +339,16 @@ class CassNAT(nn.Module):
             aligned_seq[b, xb-1] = yb - 1 if score1 > score2 else yb - 2
             for t in range(xb-1, 0, -1):
                 aligned_seq[b, t-1] = bp[b,t,aligned_seq[b, t]]
-        # print('aligned seq', aligned_seq.size())
-        # print('path', path.size())
-        # print('path values', aligned_seq.max())
-        # print('path values', aligned_seq.min())
+        
         # ///OG 5. remove repetition, locate the time step for each label 
         aligned_seq = torch.gather(path, 1, aligned_seq)
-        # print('aligned seq after', aligned_seq.size())
         aligned_seq_shift = aligned_seq.new_zeros(aligned_seq.size())
         aligned_seq_shift[:, 1:] = aligned_seq[:,:-1]
         dup = aligned_seq == aligned_seq_shift #generates matrix with only first activation of each token
-        # print("aligned_seq", aligned_seq)
+        
         aligned_seq.masked_fill_(dup, 0)
         aligned_seq_shift[:,1:] = aligned_seq[:,:-1]
         
-        # print("aligned_seq_shift sum", aligned_seq_shift.sum())
         #final op is of form (0,0,1,0,0,0,1,0) for (_,_,C,C,C,C,A,A)
         return aligned_seq_shift, ylens, ymax
 
